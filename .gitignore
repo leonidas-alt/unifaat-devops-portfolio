@@ -9,3 +9,9 @@ Thumbs.db
 
 dist/
 build/
+
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+*.pem
