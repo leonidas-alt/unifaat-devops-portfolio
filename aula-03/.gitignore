@@ -1,0 +1,25 @@
+# Terraform — arquivos gerados localmente
+.terraform/
+.terraform.lock.hcl
+
+# Estado do Terraform — NUNCA commitar
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+
+# Variáveis sensíveis (credenciais, secrets)
+*.tfvars
+*.tfvars.json
+
+# Arquivos de override (uso local apenas)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Plano binário do Terraform
+*.tfplan
+
+# Logs e temporários
+crash.log
+crash.*.log
