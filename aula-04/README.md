@@ -126,7 +126,6 @@ O User Data leva ~2 minutos para instalar Node.js e iniciar a API. Monitore com:
 ssh -i ./technova-key.pem ec2-user@<IP>
 sudo tail -f /var/log/user-data.log
 ```
-
 ---
 
 ## Como Testar
