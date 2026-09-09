@@ -1,0 +1,47 @@
+# =============================================
+# .gitignore — Terraform (Aula 04)
+# TechNova — Emilly Santos de Oliveira (4023575)
+# =============================================
+
+# ── Diretório de providers do Terraform ──────
+.terraform/
+.terraform.lock.hcl
+
+# ── Estado do Terraform — NUNCA commitar ─────
+# O tfstate contém dados sensíveis e ARNs reais
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+
+# ── Variáveis com valores reais ───────────────
+# terraform.tfvars pode conter credenciais/IPs
+# Descomente se necessário:
+# terraform.tfvars
+# *.tfvars
+# *.tfvars.json
+
+# ── Chave privada SSH — NUNCA commitar ────────
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+
+# ── Plano binário do Terraform ────────────────
+*.tfplan
+*.plan
+
+# ── Arquivos de override (uso local apenas) ───
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ── Logs e arquivos temporários ───────────────
+crash.log
+crash.*.log
+*.tfvars.bak
+
+# ── Evidências de execução (ficam no repo) ────
+# Descomente para ignorar:
+# evidencia-*.txt
+# evidencia-*.json
