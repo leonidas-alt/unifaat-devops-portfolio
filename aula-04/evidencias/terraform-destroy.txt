@@ -1,0 +1,38 @@
+terraform_data.infra_summary: Destroying... [id=939c81a4-1eb2-0bc9-35cb-f4ee413c5823]
+terraform_data.region_check: Destroying... [id=0f4e03ba-d8eb-7b67-accc-3d25a58bf784]
+terraform_data.infra_summary: Destruction complete after 0s
+terraform_data.region_check: Destruction complete after 0s
+local_sensitive_file.private_key: Destroying... [id=af8ba32882f24bcac597b878251985144f8512a1]
+local_sensitive_file.private_key: Destruction complete after 0s
+aws_route_table_association.public[1]: Destroying... [id=rtbassoc-0078741b9cd51b205]
+aws_route_table_association.public[0]: Destroying... [id=rtbassoc-0afae973bc1875c85]
+aws_subnet.private[1]: Destroying... [id=subnet-06a89407fd331920a]
+aws_subnet.private[0]: Destroying... [id=subnet-07bc4e672db1e1535]
+aws_security_group.db: Destroying... [id=sg-06e24e4b76217d134]
+aws_instance.api: Destroying... [id=i-0993050115c3f934f]
+aws_route_table_association.public[0]: Destruction complete after 1s
+aws_route_table_association.public[1]: Destruction complete after 1s
+aws_route_table.public: Destroying... [id=rtb-035d651eda4b719da]
+aws_subnet.private[0]: Destruction complete after 1s
+aws_subnet.private[1]: Destruction complete after 1s
+aws_security_group.db: Destruction complete after 1s
+aws_route_table.public: Destruction complete after 1s
+aws_instance.api: Still destroying... [id=i-0993050115c3f934f, 00m10s elapsed]
+aws_instance.api: Still destroying... [id=i-0993050115c3f934f, 00m20s elapsed]
+aws_instance.api: Destruction complete after 21s
+aws_key_pair.technova: Destroying... [id=technova-key]
+aws_subnet.public[0]: Destroying... [id=subnet-068c666127cf07e9c]
+aws_internet_gateway.main: Destroying... [id=igw-04d1fd5648bb5aa5c]
+aws_security_group.api: Destroying... [id=sg-0e5e0f00b5654bf0a]
+aws_subnet.public[1]: Destroying... [id=subnet-00ca276dc36dbd123]
+aws_key_pair.technova: Destruction complete after 0s
+tls_private_key.technova: Destroying... [id=bec46995890de2bb8aeb01a868d24d47afb41218]
+tls_private_key.technova: Destruction complete after 0s
+aws_subnet.public[0]: Destruction complete after 1s
+aws_internet_gateway.main: Destruction complete after 1s
+aws_subnet.public[1]: Destruction complete after 1s
+aws_security_group.api: Destruction complete after 1s
+aws_vpc.main: Destroying... [id=vpc-01dd72ca786e0d162]
+aws_vpc.main: Destruction complete after 1s
+
+Destroy complete! Resources: 17 destroyed.
