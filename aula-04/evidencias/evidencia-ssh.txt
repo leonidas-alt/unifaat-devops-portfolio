@@ -1,0 +1,28 @@
+** WARNING: connection is not using a post-quantum key exchange algorithm.
+** This session may be vulnerable to "store now, decrypt later" attacks.
+** The server may need to be upgraded. See https://openssh.com/pq.html
+v18.20.8
+10.8.2
+● technova-api.service - TechNova API — Node.js
+     Loaded: loaded (/etc/systemd/system/technova-api.service; enabled; preset: disabled)
+     Active: active (running) since Fri 2026-09-11 01:01:11 UTC; 9min ago
+   Main PID: 12713 (node)
+      Tasks: 7 (limit: 1113)
+     Memory: 15.6M
+        CPU: 181ms
+     CGroup: /system.slice/technova-api.service
+             └─12713 /usr/bin/node /opt/technova-api/server.js
+
+Sep 11 01:01:11 ip-10-0-1-227.ec2.internal systemd[1]: Started technova-api.service - TechNova API — Node.js.
+Sep 11 01:01:11 ip-10-0-1-227.ec2.internal node[12713]: TechNova API iniciada na porta 3000
+Sep 11 01:01:11 ip-10-0-1-227.ec2.internal node[12713]: Rotas: / | /health | /info
++ systemctl start technova-api
++ echo ========================================
+========================================
++ echo 'Bootstrap concluído com sucesso!'
+Bootstrap concluído com sucesso!
+++ curl -s http://169.254.169.254/latest/meta-data/public-ipv4
++ echo 'API disponível em http://:3000'
+API disponível em http://:3000
++ echo ========================================
+========================================

@@ -36,6 +36,11 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
+# ── Credenciais AWS — NUNCA commitar ─────────
+aws-creds.sh
+*-creds.sh
+*.credentials
+
 # ── Logs e arquivos temporários ───────────────
 crash.log
 crash.*.log

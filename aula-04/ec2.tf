@@ -213,7 +213,9 @@ resource "aws_instance" "api" {
   key_name = aws_key_pair.technova.key_name
 
   # Instance Profile com permissões S3 read-only
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
+  # Nota: AWS Academy não permite iam:CreateRole — recurso definido em iam.tf
+  # mas não aplicado no laboratório (sem permissão para criar roles).
+  # iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
   # Bootstrap automático da API
   user_data                   = local.user_data
@@ -240,6 +242,5 @@ resource "aws_instance" "api" {
   # Aguarda o User Data terminar antes de dar "apply concluído"
   depends_on = [
     aws_internet_gateway.main,
-    aws_iam_instance_profile.ec2_profile,
   ]
 }

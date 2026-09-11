@@ -1,0 +1,31 @@
+ami_id = "ami-085b153e241f89f29"
+api_health_url = "http://100.27.230.53:3000/health"
+api_security_group_id = "sg-0e5e0f00b5654bf0a"
+api_url = "http://100.27.230.53:3000"
+db_security_group_id = "sg-06e24e4b76217d134"
+ec2_availability_zone = "us-east-1a"
+ec2_instance_id = "i-0993050115c3f934f"
+ec2_private_ip = "10.0.1.227"
+ec2_public_ip = "100.27.230.53"
+internet_gateway_id = "igw-04d1fd5648bb5aa5c"
+key_pair_name = "technova-key"
+private_key_path = <sensitive>
+private_subnet_cidrs = [
+  "10.0.2.0/24",
+  "10.0.4.0/24",
+]
+private_subnet_ids = [
+  "subnet-07bc4e672db1e1535",
+  "subnet-06a89407fd331920a",
+]
+public_subnet_cidrs = [
+  "10.0.1.0/24",
+  "10.0.3.0/24",
+]
+public_subnet_ids = [
+  "subnet-068c666127cf07e9c",
+  "subnet-00ca276dc36dbd123",
+]
+ssh_command = "ssh -i ./technova-key.pem ec2-user@100.27.230.53"
+vpc_cidr = "10.0.0.0/16"
+vpc_id = "vpc-01dd72ca786e0d162"

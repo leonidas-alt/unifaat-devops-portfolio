@@ -57,16 +57,18 @@ output "db_security_group_id" {
 }
 
 # ── IAM ───────────────────────────────────────
+# Nota: AWS Academy bloqueia iam:CreateRole — outputs comentados para o lab.
+# O código em iam.tf está correto e seria aplicado em conta com permissão plena.
 
-output "iam_role_arn" {
-  description = "ARN da IAM Role do EC2"
-  value       = aws_iam_role.ec2_role.arn
-}
-
-output "instance_profile_name" {
-  description = "Nome do Instance Profile anexado ao EC2"
-  value       = aws_iam_instance_profile.ec2_profile.name
-}
+# output "iam_role_arn" {
+#   description = "ARN da IAM Role do EC2"
+#   value       = aws_iam_role.ec2_role.arn
+# }
+#
+# output "instance_profile_name" {
+#   description = "Nome do Instance Profile anexado ao EC2"
+#   value       = aws_iam_instance_profile.ec2_profile.name
+# }
 
 # ── EC2 ───────────────────────────────────────
 
