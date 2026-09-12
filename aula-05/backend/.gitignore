@@ -1,0 +1,36 @@
+# =============================================
+# backend/.gitignore — Terraform Backend
+# TechNova — Emilly Santos de Oliveira (4023575)
+# =============================================
+
+# ── Cache local do Terraform ──────────────────
+.terraform/
+
+# IMPORTANTE: .terraform.lock.hcl DEVE ser commitado
+# (garante reproducibilidade — não ignore aqui)
+
+# ── Estado local — NUNCA commitar ────────────
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+
+# ── Variáveis sensíveis ───────────────────────
+# backend/terraform.tfvars NÃO contém senha,
+# mas por consistência e boas práticas, não commitamos .tfvars
+terraform.tfvars
+*.tfvars
+*.tfvars.json
+
+# ── Plano binário ─────────────────────────────
+*.tfplan
+*.plan
+
+# ── Override files ────────────────────────────
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ── Logs ──────────────────────────────────────
+crash.log
+crash.*.log

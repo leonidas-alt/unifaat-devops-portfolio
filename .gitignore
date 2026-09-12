@@ -6,8 +6,16 @@ node_modules/
 .terraform/
 *.tfstate
 *.tfstate.backup
+*.tfstate.*
 *.tfvars
-.terraform.lock.hcl
+*.tfvars.json
+*.tfplan
+*.plan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
 
 # Credenciais AWS Academy (NUNCA versionar)
 aws-creds.sh
@@ -15,6 +23,12 @@ aws-creds.sh
 # Chaves SSH
 *.pem
 *.key
+id_rsa
+id_rsa.pub
+
+# Credenciais AWS locais
+.aws/
+*.credentials
 
 # OS
 .DS_Store

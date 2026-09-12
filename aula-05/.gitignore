@@ -1,0 +1,34 @@
+# ── Providers e cache do Terraform ───────────
+.terraform/
+
+
+# ── Estado do Terraform — NUNCA commitar ─────
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+
+# ── Variáveis com valores sensíveis ──────────
+terraform.tfvars
+*.tfvars
+*.tfvars.json
+
+# ── Chave privada SSH — NUNCA commitar ────────
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+
+# ── Plano binário do Terraform ────────────────
+*.tfplan
+*.plan
+
+# ── Arquivos de override (uso local apenas) ───
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# ── Logs e arquivos temporários ───────────────
+crash.log
+crash.*.log
+*.tfvars.bak
