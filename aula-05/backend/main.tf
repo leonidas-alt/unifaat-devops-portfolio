@@ -46,7 +46,6 @@ provider "aws" {
   }
 }
 
-# ── Sufixo aleatório para nome único do bucket ──
 resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
@@ -54,11 +53,6 @@ resource "random_id" "bucket_suffix" {
 locals {
   bucket_name = "${var.bucket_prefix}-${var.ra}-${random_id.bucket_suffix.hex}"
 }
-
-# ── S3 Bucket via AWS CLI ─────────────────────
-# Criado via null_resource porque o provider aws ~> 5.x
-# tenta ler s3:GetBucketObjectLockConfiguration no refresh,
-# operação bloqueada pelo SCP do AWS Academy (erro 403).
 
 resource "terraform_data" "s3_bucket" {
   input = local.bucket_name
@@ -81,7 +75,6 @@ resource "terraform_data" "s3_bucket" {
   }
 }
 
-# ── Versionamento ─────────────────────────────
 resource "aws_s3_bucket_versioning" "terraform_state" {
   bucket = local.bucket_name
 
@@ -92,7 +85,6 @@ resource "aws_s3_bucket_versioning" "terraform_state" {
   depends_on = [terraform_data.s3_bucket]
 }
 
-# ── Encriptação server-side (SSE-S3) ──────────
 resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
   bucket = local.bucket_name
 
@@ -106,7 +98,6 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" 
   depends_on = [terraform_data.s3_bucket]
 }
 
-# ── Block Public Access ────────────────────────
 resource "aws_s3_bucket_public_access_block" "terraform_state" {
   bucket = local.bucket_name
 
@@ -118,7 +109,6 @@ resource "aws_s3_bucket_public_access_block" "terraform_state" {
   depends_on = [terraform_data.s3_bucket]
 }
 
-# ── Bucket Policy — apenas HTTPS ──────────────
 resource "aws_s3_bucket_policy" "terraform_state" {
   bucket = local.bucket_name
 
@@ -146,7 +136,6 @@ resource "aws_s3_bucket_policy" "terraform_state" {
   })
 }
 
-# ── DynamoDB — State Locking ──────────────────
 resource "aws_dynamodb_table" "terraform_lock" {
   name         = var.dynamodb_table_name
   billing_mode = "PAY_PER_REQUEST"
