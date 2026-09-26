@@ -1,0 +1,13 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfplan
+.terraform.lock.hcl
+
+# Credenciais AWS Academy (NUNCA versionar)
+aws-creds.sh
+
+# Secrets
+*.pem
+.env

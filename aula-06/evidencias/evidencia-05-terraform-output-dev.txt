@@ -1,0 +1,32 @@
+========================================================
+EVIDENCIA 06 — Terraform Output (Ambiente DEV)
+Aluno: Emilly Santos de Oliveira
+RA: 4023575
+Data: 2026-09-26
+========================================================
+
+DIRETORIO:
+----------
+aula-06/environments/dev/
+
+COMANDO EXECUTADO:
+-----------------
+terraform output
+
+SAIDA (preencher apos execucao no Learner Lab):
+-----------------------------------------------
+api_instance_id = "i-05642b995344b7bce"
+api_public_ip = "34.201.136.221"
+api_sg_id = "sg-0cccb5657f1a77320"
+db_endpoint = "technova-dev-db.cifkfz3kqn6r.us-east-1.rds.amazonaws.com:5432"
+db_name = "technova_dev"
+private_subnet_ids = [
+  "subnet-036a29151423219ac",
+  "subnet-03efc2300f7f66aa6",
+]
+public_subnet_ids = [
+  "subnet-04d3dab30f211bd25",
+  "subnet-011a3ae999df35e8c",
+]
+rds_sg_id = "sg-07e0517fc845b090e"
+vpc_id = "vpc-08b9ce1d39b98ed31"

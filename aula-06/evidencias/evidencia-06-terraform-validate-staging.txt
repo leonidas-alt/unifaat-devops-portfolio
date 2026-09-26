@@ -1,0 +1,18 @@
+========================================================
+EVIDENCIA 07 — Terraform Validate (Ambiente STAGING)
+Aluno: Emilly Santos de Oliveira
+RA: 4023575
+Data: 2026-09-26
+========================================================
+
+DIRETORIO:
+----------
+aula-06/environments/staging/
+
+COMANDO EXECUTADO:
+-----------------
+terraform validate
+
+SAIDA:
+------
+Success! The configuration is valid.

@@ -1,0 +1,18 @@
+========================================================
+EVIDENCIA 03 — Terraform Validate (Ambiente DEV)
+Aluno: Emilly Santos de Oliveira
+RA: 4023575
+Data: 2026-09-26
+========================================================
+
+DIRETORIO:
+----------
+aula-06/environments/dev/
+
+COMANDO EXECUTADO:
+-----------------
+terraform validate
+
+SAIDA:
+------
+Success! The configuration is valid.
