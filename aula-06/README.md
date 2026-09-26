@@ -1,265 +1,10 @@
-# Biblioteca de Módulos Terraform — TechNova
+# Aula 06 — Biblioteca de Módulos Terraform (TechNova)
 
 ## Visão Geral
 
-Esta biblioteca contém módulos Terraform reutilizáveis para provisionar a infraestrutura da TechNova na AWS. Com ela, qualquer membro da equipe pode criar ambientes completos (VPC, Security Groups, EC2, RDS) a partir dos mesmos módulos, apenas alterando as variáveis.
+Nesta aula construímos uma biblioteca de módulos Terraform reutilizáveis para provisionar a infraestrutura completa da TechNova na AWS. O princípio central é a **composição de módulos**: o output de um módulo alimenta o input de outro, e o Terraform resolve o grafo de dependências automaticamente.
 
-Os módulos seguem o padrão de **composição**: o output de um módulo alimenta o input de outro, criando um grafo de dependências gerenciado automaticamente pelo Terraform.
-
----
-
-## Arquitetura
-
-```
-environments/dev/main.tf
-environments/staging/main.tf
-        │
-        ├── module "vpc"          → cria VPC, subnets, IGW, route tables
-        │       │
-        │       └── vpc_id ──────────► module "api_sg"
-        │       └── vpc_id ──────────► module "rds_sg"
-        │       └── public_subnet_ids[0] ──► module "api_server" (EC2)
-        │       └── private_subnet_ids ──► module "database" (RDS)
-        │
-        ├── module "api_sg"       → Security Group para o servidor API
-        │       └── sg_id ───────────► module "api_server" (EC2)
-        │
-        ├── module "rds_sg"       → Security Group para o banco de dados
-        │       └── sg_id ───────────► module "database" (RDS)
-        │
-        ├── module "api_server"   → Instância EC2 na subnet pública
-        │
-        └── module "database"    → Instância RDS PostgreSQL nas subnets privadas
-```
-
----
-
-## Módulos Disponíveis
-
-### Módulo VPC (`modules/vpc/`)
-
-**Descrição:** Cria uma VPC completa com subnets dinâmicas usando `for_each`, Internet Gateway e route tables.
-
-**Inputs:**
-
-| Nome | Tipo | Obrigatório | Descrição |
-|---|---|---|---|
-| `vpc_cidr` | `string` | Sim | CIDR block da VPC |
-| `project_name` | `string` | Sim | Nome do projeto para tags |
-| `environment` | `string` | Sim | Ambiente (dev, staging, prod) |
-| `subnets` | `map(object)` | Sim | Mapa de subnets: cada chave é o nome; valor tem `cidr`, `az`, `type` (public/private) |
-
-**Outputs:**
-
-| Nome | Descrição |
-|---|---|
-| `vpc_id` | ID da VPC criada |
-| `vpc_cidr` | CIDR block da VPC |
-| `public_subnet_ids` | Lista de IDs das subnets públicas |
-| `private_subnet_ids` | Lista de IDs das subnets privadas |
-| `internet_gateway_id` | ID do Internet Gateway |
-
-**Exemplo de uso:**
-
-```hcl
-module "vpc" {
-  source = "../../modules/vpc"
-
-  vpc_cidr     = "10.0.0.0/16"
-  project_name = "technova"
-  environment  = "dev"
-
-  subnets = {
-    "public-1"  = { cidr = "10.0.1.0/24", az = "us-east-1a", type = "public" }
-    "public-2"  = { cidr = "10.0.2.0/24", az = "us-east-1b", type = "public" }
-    "private-1" = { cidr = "10.0.3.0/24", az = "us-east-1a", type = "private" }
-    "private-2" = { cidr = "10.0.4.0/24", az = "us-east-1b", type = "private" }
-  }
-}
-```
-
----
-
-### Módulo Security Group (`modules/security-group/`)
-
-**Descrição:** Security Group genérico que aceita regras de ingress como lista de objetos. Pode ser usado para qualquer finalidade (API, RDS, Bastion).
-
-**Inputs:**
-
-| Nome | Tipo | Obrigatório | Descrição |
-|---|---|---|---|
-| `name` | `string` | Sim | Nome do Security Group |
-| `vpc_id` | `string` | Sim | ID da VPC |
-| `ingress_rules` | `list(object)` | Não | Regras de entrada (from_port, to_port, protocol, cidr_blocks, description) |
-| `egress_rules` | `list(object)` | Não | Regras de saída (padrão: todo tráfego liberado) |
-| `description` | `string` | Não | Descrição do SG (padrão: "Managed by Terraform") |
-| `environment` | `string` | Sim | Ambiente |
-| `project_name` | `string` | Sim | Nome do projeto |
-
-**Outputs:**
-
-| Nome | Descrição |
-|---|---|
-| `sg_id` | ID do Security Group criado |
-| `sg_name` | Nome do Security Group |
-
-**Exemplo de uso:**
-
-```hcl
-module "api_sg" {
-  source = "../../modules/security-group"
-
-  name         = "technova-dev-api-sg"
-  vpc_id       = module.vpc.vpc_id   # ← Composição com módulo VPC
-  environment  = "dev"
-  project_name = "technova"
-
-  ingress_rules = [
-    {
-      from_port   = 80
-      to_port     = 80
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-      description = "HTTP from anywhere"
-    }
-  ]
-}
-```
-
----
-
-### Módulo EC2 (`modules/ec2/`)
-
-**Descrição:** Cria uma instância EC2 com AMI, tipo, subnet e Security Groups configuráveis.
-
-**Inputs:**
-
-| Nome | Tipo | Obrigatório | Descrição |
-|---|---|---|---|
-| `instance_name` | `string` | Sim | Nome da instância |
-| `ami_id` | `string` | Sim | ID da AMI |
-| `subnet_id` | `string` | Sim | ID da subnet |
-| `security_group_ids` | `list(string)` | Sim | Lista de IDs dos Security Groups |
-| `key_name` | `string` | Sim | Nome do key pair SSH |
-| `instance_type` | `string` | Não | Tipo da instância (padrão: `t2.micro`) |
-| `user_data` | `string` | Não | Script de user data |
-| `environment` | `string` | Sim | Ambiente |
-| `project_name` | `string` | Sim | Nome do projeto |
-
-**Outputs:**
-
-| Nome | Descrição |
-|---|---|
-| `instance_id` | ID da instância EC2 |
-| `public_ip` | IP público da instância |
-| `private_ip` | IP privado da instância |
-
-**Exemplo de uso:**
-
-```hcl
-module "api_server" {
-  source = "../../modules/ec2"
-
-  instance_name      = "technova-dev-api"
-  ami_id             = "ami-0c02fb55956c7d316"
-  subnet_id          = module.vpc.public_subnet_ids[0]  # ← Composição com módulo VPC
-  security_group_ids = [module.api_sg.sg_id]            # ← Composição com módulo SG
-  key_name           = "technova-key"
-  environment        = "dev"
-  project_name       = "technova"
-}
-```
-
----
-
-### Módulo RDS (`modules/rds/`)
-
-**Descrição:** Cria um DB Subnet Group e uma instância RDS PostgreSQL nas subnets privadas.
-
-**Inputs:**
-
-| Nome | Tipo | Obrigatório | Descrição |
-|---|---|---|---|
-| `db_name` | `string` | Sim | Nome do banco de dados |
-| `db_username` | `string` | Sim | Usuário master |
-| `db_password` | `string` (sensitive) | Sim | Senha master |
-| `subnet_ids` | `list(string)` | Sim | IDs das subnets para o DB Subnet Group |
-| `security_group_ids` | `list(string)` | Sim | IDs dos Security Groups |
-| `instance_class` | `string` | Não | Classe da instância (padrão: `db.t3.micro`) |
-| `environment` | `string` | Sim | Ambiente |
-| `project_name` | `string` | Sim | Nome do projeto |
-
-**Outputs:**
-
-| Nome | Descrição |
-|---|---|
-| `db_endpoint` | Endpoint de conexão com o banco |
-| `db_name` | Nome do banco de dados |
-| `db_port` | Porta do banco de dados |
-
-**Exemplo de uso:**
-
-```hcl
-module "database" {
-  source = "../../modules/rds"
-
-  db_name            = "technova_dev"
-  db_username        = "technovaadmin"
-  db_password        = var.db_password  # Nunca coloque a senha diretamente
-  subnet_ids         = module.vpc.private_subnet_ids  # ← Composição com módulo VPC
-  security_group_ids = [module.rds_sg.sg_id]          # ← Composição com módulo SG
-  environment        = "dev"
-  project_name       = "technova"
-}
-```
-
----
-
-## Como Usar — Criar um Novo Ambiente
-
-1. Copie a pasta `environments/dev/` para `environments/prod/`
-2. Altere os CIDRs no `main.tf` para evitar conflitos (ex: `10.2.0.0/16`)
-3. Atualize o `terraform.tfvars` com os valores do novo ambiente
-4. Execute:
-
-```bash
-cd environments/prod
-terraform init
-terraform validate
-terraform plan
-terraform apply
-```
-
----
-
-## Pré-requisitos
-
-- **Terraform** >= 1.0
-- **AWS CLI** configurado com credenciais válidas
-- **Key Pair** criado no AWS EC2 com o nome informado em `key_name`
-- Credenciais do AWS Academy Learner Lab carregadas via `source aws-creds.sh`
-
----
-
-## Estrutura do Projeto
-
-```
-aula-06/
-├── README.md
-├── .gitignore
-├── modules/
-│   ├── vpc/               # VPC, subnets dinâmicas (for_each), IGW, route tables
-│   ├── security-group/    # Security Group genérico com regras dinâmicas
-│   ├── ec2/               # Instância EC2
-│   └── rds/               # Instância RDS PostgreSQL + DB Subnet Group
-└── environments/
-    ├── dev/               # Ambiente de desenvolvimento (CIDRs 10.0.x.x)
-    └── staging/           # Ambiente de homologação (CIDRs 10.1.x.x)
-```
-
----
-
-## Comparação entre Ambientes
+Com a mesma biblioteca de módulos (`modules/`), provisionamos dois ambientes independentes apenas trocando variáveis:
 
 | Aspecto | Dev | Staging |
 |---|---|---|
@@ -270,3 +15,243 @@ aula-06/
 | RDS | db.t3.micro | db.t3.micro |
 | DB Name | `technova_dev` | `technova_staging` |
 | Naming | `technova-dev-*` | `technova-staging-*` |
+
+---
+
+## Diagrama da Infraestrutura
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  AWS — us-east-1                                                        │
+│                                                                         │
+│  ┌──────────────────────────────────────────────────────────────────┐   │
+│  │  VPC  10.0.0.0/16  (dev)  /  10.1.0.0/16  (staging)            │   │
+│  │                                                                  │   │
+│  │  ┌─────────────────────────┐  ┌──────────────────────────────┐  │   │
+│  │  │  Subnet Pública         │  │  Subnet Pública              │  │   │
+│  │  │  us-east-1a             │  │  us-east-1b                  │  │   │
+│  │  │  10.0.1.0/24            │  │  10.0.2.0/24                 │  │   │
+│  │  │                         │  │                              │  │   │
+│  │  │  ┌───────────────────┐  │  │                              │  │   │
+│  │  │  │  EC2 (api_server) │  │  │                              │  │   │
+│  │  │  │  t2.micro         │  │  │                              │  │   │
+│  │  │  │  SG: api_sg       │  │  │                              │  │   │
+│  │  │  │  porta 80 (HTTP)  │  │  │                              │  │   │
+│  │  │  │  porta 22 (SSH)   │  │  │                              │  │   │
+│  │  │  └───────────────────┘  │  │                              │  │   │
+│  │  └─────────────────────────┘  └──────────────────────────────┘  │   │
+│  │                 │                                                │   │
+│  │           Internet Gateway ←── Route Table Pública              │   │
+│  │                 │                                                │   │
+│  │  ┌─────────────────────────┐  ┌──────────────────────────────┐  │   │
+│  │  │  Subnet Privada         │  │  Subnet Privada              │  │   │
+│  │  │  us-east-1a             │  │  us-east-1b                  │  │   │
+│  │  │  10.0.3.0/24            │  │  10.0.4.0/24                 │  │   │
+│  │  │                         │  │                              │  │   │
+│  │  │  ┌───────────────────┐  │  │                              │  │   │
+│  │  │  │  RDS PostgreSQL   │  │  │  (DB Subnet Group            │  │   │
+│  │  │  │  db.t3.micro      │  │  │   abrange as duas)           │  │   │
+│  │  │  │  SG: rds_sg       │  │  │                              │  │   │
+│  │  │  │  porta 5432       │  │  │                              │  │   │
+│  │  │  │  (apenas da VPC)  │  │  │                              │  │   │
+│  │  │  └───────────────────┘  │  │                              │  │   │
+│  │  └─────────────────────────┘  └──────────────────────────────┘  │   │
+│  └──────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Diagrama de Composição dos Módulos Terraform
+
+```
+environments/dev/main.tf  (ou staging/main.tf)
+│
+├── module "vpc"
+│   ├── input:  vpc_cidr, project_name, environment, subnets
+│   └── output: vpc_id ──────────────────┬─────────────┐
+│               public_subnet_ids[0] ────│─────────┐   │
+│               private_subnet_ids ──────│────┐    │   │
+│                                        │    │    │   │
+├── module "api_sg"                      │    │    │   │
+│   ├── input:  vpc_id ◄─────────────────┘    │    │   │
+│   └── output: sg_id ───────────────────┐    │    │   │
+│                                        │    │    │   │
+├── module "rds_sg"                      │    │    │   │
+│   ├── input:  vpc_id ◄──────────────────────│────┘   │
+│   └── output: sg_id ──────────────┐    │    │        │
+│                                   │    │    │        │
+├── module "api_server" (EC2)        │    │    │        │
+│   ├── input:  subnet_id ◄──────────────│────┘        │
+│   │           security_group_ids ◄─────┘             │
+│   └── output: instance_id, public_ip, private_ip     │
+│                                                      │
+└── module "database" (RDS)                            │
+    ├── input:  subnet_ids ◄────────────────────────────┘
+    │           security_group_ids ◄────┘
+    └── output: db_endpoint, db_name, db_port
+```
+
+---
+
+## Módulos Disponíveis
+
+### `modules/vpc/`
+
+Cria VPC, subnets dinâmicas com `for_each`, Internet Gateway e route table pública.
+
+| Input | Tipo | Descrição |
+|---|---|---|
+| `vpc_cidr` | `string` | CIDR block da VPC |
+| `project_name` | `string` | Nome do projeto |
+| `environment` | `string` | Ambiente (dev, staging, prod) |
+| `subnets` | `map(object)` | Mapa de subnets com `cidr`, `az`, `type` |
+
+| Output | Descrição |
+|---|---|
+| `vpc_id` | ID da VPC criada |
+| `public_subnet_ids` | Lista de IDs das subnets públicas |
+| `private_subnet_ids` | Lista de IDs das subnets privadas |
+
+---
+
+### `modules/security-group/`
+
+Security Group genérico com regras de ingress/egress configuráveis como lista de objetos.
+
+| Input | Tipo | Descrição |
+|---|---|---|
+| `name` | `string` | Nome do Security Group |
+| `vpc_id` | `string` | ID da VPC |
+| `ingress_rules` | `list(object)` | Regras de entrada |
+| `egress_rules` | `list(object)` | Regras de saída |
+
+| Output | Descrição |
+|---|---|
+| `sg_id` | ID do Security Group |
+
+---
+
+### `modules/ec2/`
+
+Instância EC2 com AMI, tipo, subnet e Security Groups configuráveis.
+
+| Input | Tipo | Descrição |
+|---|---|---|
+| `instance_name` | `string` | Nome da instância |
+| `ami_id` | `string` | ID da AMI |
+| `instance_type` | `string` | Tipo (padrão: `t2.micro`) |
+| `subnet_id` | `string` | ID da subnet pública |
+| `security_group_ids` | `list(string)` | IDs dos Security Groups |
+| `key_name` | `string` | Nome do key pair SSH |
+
+| Output | Descrição |
+|---|---|
+| `instance_id` | ID da instância |
+| `public_ip` | IP público |
+
+---
+
+### `modules/rds/`
+
+DB Subnet Group + instância RDS PostgreSQL 15 nas subnets privadas.
+
+| Input | Tipo | Descrição |
+|---|---|---|
+| `db_name` | `string` | Nome do banco |
+| `db_username` | `string` | Usuário master |
+| `db_password` | `string` (sensitive) | Senha master |
+| `subnet_ids` | `list(string)` | Subnets privadas |
+| `security_group_ids` | `list(string)` | IDs dos Security Groups |
+| `instance_class` | `string` | Classe (padrão: `db.t3.micro`) |
+
+| Output | Descrição |
+|---|---|
+| `db_endpoint` | Endpoint de conexão |
+| `db_name` | Nome do banco |
+| `db_port` | Porta (5432) |
+
+---
+
+## Estrutura do Projeto
+
+```
+aula-06/
+├── README.md
+├── .gitignore
+├── modules/
+│   ├── vpc/
+│   │   ├── main.tf        # VPC, subnets (for_each), IGW, route table
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   ├── security-group/
+│   │   ├── main.tf        # SG + regras dinâmicas via count
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   ├── ec2/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   └── rds/
+│       ├── main.tf        # DB Subnet Group + instância RDS PostgreSQL
+│       ├── variables.tf
+│       └── outputs.tf
+└── environments/
+    ├── dev/
+    │   ├── main.tf        # Composição dos módulos — CIDRs 10.0.x.x
+    │   ├── variables.tf
+    │   ├── outputs.tf
+    │   ├── providers.tf
+    │   └── terraform.tfvars
+    └── staging/
+        ├── main.tf        # Composição dos módulos — CIDRs 10.1.x.x
+        ├── variables.tf
+        ├── outputs.tf
+        ├── providers.tf
+        └── terraform.tfvars
+```
+
+---
+
+## Como Usar
+
+### Pré-requisitos
+
+- Terraform >= 1.0
+- AWS CLI configurado (AWS Academy: `source aws-creds.sh`)
+- Key Pair criado no EC2 com o nome definido em `key_name`
+
+### Subir um ambiente
+
+```bash
+cd environments/dev      # ou environments/staging
+
+terraform init
+terraform validate
+terraform plan
+terraform apply
+```
+
+### Destruir o ambiente
+
+```bash
+terraform destroy
+```
+
+### Criar um novo ambiente (ex: prod)
+
+1. Copie `environments/dev/` para `environments/prod/`
+2. Altere o CIDR no `main.tf` para evitar conflito (ex: `10.2.0.0/16`)
+3. Atualize o `terraform.tfvars` com os valores do novo ambiente
+4. Execute `terraform init && terraform apply`
+
+---
+
+## Conceitos Aplicados
+
+- **Módulos reutilizáveis** — mesma base de código para todos os ambientes
+- **Composição de módulos** — outputs de um módulo viram inputs de outro
+- **`for_each` em subnets** — subnets criadas dinamicamente a partir de um mapa
+- **`count` em regras de SG** — regras de ingress/egress criadas dinamicamente
+- **Sensitive variables** — senha do banco marcada como `sensitive = true`
+- **Separação de ambientes** — cada ambiente tem seu próprio state file
