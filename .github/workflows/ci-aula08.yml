@@ -1,0 +1,101 @@
+name: CI Pipeline — Aula 08
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'aula-08/**'
+      - '.github/workflows/ci-aula08.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'aula-08/**'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: aula-08
+
+jobs:
+  lint:
+    name: Lint (ESLint)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: aula-08/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar ESLint
+        run: npm run lint
+
+  test:
+    name: Tests (Jest)
+    needs: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: aula-08/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar testes com coverage
+        run: npm run test:ci
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: aula-08/coverage/
+          retention-days: 14
+
+  build:
+    name: Build (Docker)
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # R5: Secret referenciado no workflow
+      - name: Configurar ambiente de build
+        run: |
+          echo "Região AWS configurada: ${{ secrets.AWS_REGION }}"
+          echo "Ambiente: ${{ secrets.APP_ENV }}"
+
+      - name: Build da imagem Docker
+        working-directory: aula-08
+        run: docker build -t technova-api:${{ github.sha }} .
+
+      - name: Verificar imagem criada
+        run: docker images technova-api
+        working-directory: aula-08
+
+      - name: Testar container (smoke test)
+        run: |
+          docker run -d --name test-container -p 3000:3000 technova-api:${{ github.sha }}
+          sleep 3
+          curl -f http://localhost:3000/health || exit 1
+          docker stop test-container
+          docker rm test-container
+        working-directory: aula-08

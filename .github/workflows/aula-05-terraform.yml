@@ -1,0 +1,78 @@
+# =============================================
+# .github/workflows/aula-05-terraform.yml
+# TechNova — Emilly Santos de Oliveira (4023575)
+# =============================================
+#
+# Valida a infraestrutura da Aula 05 (RDS + Remote State)
+# sem precisar de credenciais AWS reais.
+#
+# Etapas:
+#   1. terraform init -backend=false  (sem S3 real)
+#   2. terraform validate             (verifica sintaxe/tipos)
+#   3. terraform fmt --check          (verifica formatação)
+# =============================================
+
+name: "Aula 05 — Terraform Validate"
+
+on:
+  push:
+    paths:
+      - "aula-05/**"
+      - ".github/workflows/aula-05-terraform.yml"
+  pull_request:
+    paths:
+      - "aula-05/**"
+      - ".github/workflows/aula-05-terraform.yml"
+
+jobs:
+  # ── Job 1: Validar infraestrutura principal ──
+  validate-main:
+    name: "Validate: aula-05 (infra principal)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aula-05
+
+    steps:
+      - name: "📥 Checkout do repositório"
+        uses: actions/checkout@v4
+
+      - name: "⚙️ Setup Terraform"
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.0"
+
+      - name: "🔧 terraform init (sem backend real)"
+        run: terraform init -backend=false -input=false
+
+      - name: "✅ terraform validate"
+        run: terraform validate
+
+      - name: "📐 terraform fmt --check"
+        run: terraform fmt --check --diff --recursive
+
+  # ── Job 2: Validar o backend (S3 + DynamoDB) ──
+  validate-backend:
+    name: "Validate: aula-05/backend (remote state)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aula-05/backend
+
+    steps:
+      - name: "📥 Checkout do repositório"
+        uses: actions/checkout@v4
+
+      - name: "⚙️ Setup Terraform"
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.0"
+
+      - name: "🔧 terraform init (local backend para validação)"
+        run: terraform init -backend=false -input=false
+
+      - name: "✅ terraform validate"
+        run: terraform validate
+
+      - name: "📐 terraform fmt --check"
+        run: terraform fmt --check --diff --recursive
