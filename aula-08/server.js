@@ -1,4 +1,4 @@
-var express = require('express');
+const express = require('express') // erro intencional: sem ponto e vírgula
 const cors = require('cors');
 
 const app = express();
