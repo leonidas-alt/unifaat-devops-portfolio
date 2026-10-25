@@ -1,0 +1,168 @@
+# =============================================================================
+# ai-review.yml — Workflow de AI Review para Pull Requests
+#
+# Dispara em PRs (opened, synchronize, reopened) e executa análise
+# estática local do diff, postando um comentário formatado no PR.
+#
+# Quality Gate:
+#   - Achados CRITICAL  → workflow falha (exit 1) → PR bloqueado
+#   - Achados WARNING / INFO → workflow passa → PR pode ser mergeado
+# =============================================================================
+name: AI Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'aula-09/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  ai-review:
+    name: AI Code Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # necessário para git diff funcionar
+
+      # ── 2. Setup Node.js ─────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: aula-09/package-lock.json
+
+      # ── 3. Gerar diff dos arquivos .js alterados ──────────────────────────────
+      - name: Coletar diff do PR
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          echo "Gerando diff entre $BASE_SHA e $HEAD_SHA"
+          git diff "$BASE_SHA" "$HEAD_SHA" -- '*.js' > /tmp/pr.diff
+          echo "Linhas no diff: $(wc -l < /tmp/pr.diff)"
+          echo "diff_path=/tmp/pr.diff" >> "$GITHUB_OUTPUT"
+
+      # ── 4. Executar script de AI Review ──────────────────────────────────────
+      - name: Executar análise de AI Review
+        id: analysis
+        env:
+          DIFF_PATH: ${{ steps.diff.outputs.diff_path }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node aula-09/.github/scripts/ai-review.js \
+            --diff "$DIFF_PATH" \
+            --output /tmp/review-result.json
+          echo "result_path=/tmp/review-result.json" >> "$GITHUB_OUTPUT"
+
+      # ── 5. Formatar comentário ────────────────────────────────────────────────
+      - name: Formatar comentário do review
+        id: comment
+        run: |
+          node -e "
+            const fs = require('fs');
+            const result = JSON.parse(fs.readFileSync('/tmp/review-result.json', 'utf8'));
+            const { findings, summary, hasCritical } = result;
+
+            const severityEmoji = { CRITICAL: '🔴', WARNING: '🟡', INFO: '🔵' };
+
+            let rows = '';
+            if (findings.length === 0) {
+              rows = '| — | — | — | Nenhum problema encontrado ✅ | — |';
+            } else {
+              rows = findings.map(f =>
+                \`| \${severityEmoji[f.severity] || ''} \${f.severity} | \${f.file || '—'} | L\${f.line || '?'} | \${f.message} | \${f.rule} |\`
+              ).join('\n');
+            }
+
+            const status = hasCritical
+              ? '🔴 **Quality Gate FALHOU** — PR bloqueado até que achados CRITICAL sejam corrigidos.'
+              : '🟢 **Quality Gate PASSOU** — Nenhum achado crítico.';
+
+            const body = \`## 🤖 AI Review — TechNova Pipeline
+
+            > Análise automática do diff deste PR. Revise os achados antes do merge.
+
+            ### Resultado
+
+            \${status}
+
+            ### Achados
+
+            | Severidade | Arquivo | Linha | Descrição | Regra |
+            |-----------|---------|-------|-----------|-------|
+            \${rows}
+
+            ### Resumo
+
+            - 🔴 CRITICAL: \${summary.critical}
+            - 🟡 WARNING: \${summary.warning}
+            - 🔵 INFO: \${summary.info}
+            - 📄 Total de linhas analisadas: \${summary.linesAnalyzed}
+
+            ---
+            *Gerado por \`.github/workflows/ai-review.yml\` · Commit \`\${{ github.event.pull_request.head.sha && github.event.pull_request.head.sha.substring(0,7) }}\`*
+            \`;
+
+            fs.writeFileSync('/tmp/comment.md', body.replace(/^ {12}/gm, ''));
+          "
+
+      # ── 6. Postar/atualizar comentário no PR ──────────────────────────────────
+      - name: Postar comentário no PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/comment.md', 'utf8');
+            const marker = '<!-- ai-review-comment -->';
+            const fullBody = marker + '\n' + body;
+
+            // Busca comentário anterior para atualizar (evita duplicatas)
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+              console.log('Comentário atualizado:', existing.id);
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: fullBody,
+              });
+              console.log('Comentário criado.');
+            }
+
+      # ── 7. Quality Gate ───────────────────────────────────────────────────────
+      - name: Quality Gate
+        run: |
+          node -e "
+            const result = JSON.parse(require('fs').readFileSync('/tmp/review-result.json', 'utf8'));
+            if (result.hasCritical) {
+              console.error('❌ Quality Gate FALHOU: ' + result.summary.critical + ' achado(s) CRITICAL detectado(s).');
+              console.error('Corrija os problemas e faça um novo push.');
+              process.exit(1);
+            }
+            console.log('✅ Quality Gate PASSOU — nenhum achado CRITICAL.');
+          "
