@@ -21,7 +21,7 @@ terraform {
   # Backend remoto: estado armazenado no S3
   # Substitua o bucket pelo nome real criado no Learner Lab
   backend "s3" {
-    bucket         = "technova-tfstate-4023575"
+    bucket         = "technova-tfstate-4023575-emilly"
     key            = "aula-10/terraform.tfstate"
     region         = "us-east-1"
     encrypt        = true

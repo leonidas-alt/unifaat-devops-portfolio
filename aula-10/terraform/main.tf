@@ -88,7 +88,7 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_security_group" "api" {
   name        = "${var.project_name}-sg-api-${var.environment}"
-  description = "Security Group da TechNova API — aula-10"
+  description = "Security Group da TechNova API - aula-10"
   vpc_id      = aws_vpc.main.id
 
   # SSH (restrito — em prod use apenas IPs específicos)
@@ -111,7 +111,7 @@ resource "aws_security_group" "api" {
 
   # Saída irrestrita
   egress {
-    description = "Saída irrestrita"
+    description = "Allow all outbound traffic"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
