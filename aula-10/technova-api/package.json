@@ -1,0 +1,33 @@
+{
+  "name": "technova-api",
+  "version": "1.0.0",
+  "description": "TechNova API — aula-10: Terraform GitOps + CD Pipeline",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "jest --coverage --forceExit",
+    "test:ci": "jest --coverage --forceExit --ci",
+    "lint": "eslint server.js",
+    "lint:fix": "eslint server.js --fix"
+  },
+  "dependencies": {
+    "cors": "2.8.5",
+    "express": "4.18.2"
+  },
+  "devDependencies": {
+    "eslint": "8.56.0",
+    "jest": "29.7.0",
+    "supertest": "6.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "server.js"
+    ]
+  }
+}

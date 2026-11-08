@@ -1,0 +1,36 @@
+# Dependências locais (serão reinstaladas no build)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Cobertura de testes e artefatos de CI
+coverage/
+.nyc_output/
+__tests__/
+*.test.js
+*.spec.js
+
+# Git e CI
+.git/
+.gitignore
+.github/
+
+# Variáveis de ambiente locais
+.env
+.env.*
+!.env.example
+
+# Editor e sistema operacional
+.DS_Store
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# Documentação e screenshots
+*.md
+screenshots/
+
+# Scripts de infraestrutura (não pertencem à imagem)
+ecr-push.sh
+ia-cicd-analise.md

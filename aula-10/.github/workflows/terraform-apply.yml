@@ -1,0 +1,118 @@
+# =============================================================================
+# terraform-apply.yml — Terraform Apply automático após merge para main
+#
+# Aula 10: Terraform GitOps + CD Pipeline
+# Aluno: Emilly Santos de Oliveira (RA: 4023575)
+#
+# Fluxo:
+#   1. Disparado em push para main (apenas se .tf/.tfvars mudaram)
+#   2. Configura credenciais temporárias do Learner Lab
+#   3. Executa: terraform init → validate → apply -auto-approve
+#   4. Output do apply visível nos logs
+#
+# Secrets necessários (Settings → Secrets → Actions):
+#   AWS_ACCESS_KEY_ID      — Access Key ID do Learner Lab
+#   AWS_SECRET_ACCESS_KEY  — Secret Access Key do Learner Lab
+#   AWS_SESSION_TOKEN      — Session Token do Learner Lab
+#
+# NOTA PRODUÇÃO: Em ambientes reais fora do Learner Lab, substituir as 3
+# credenciais de sessão por OIDC + IAM Role (sem chaves estáticas).
+# =============================================================================
+name: Terraform Apply
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'aula-10/terraform/**'
+      - '.github/workflows/terraform-apply.yml'
+  workflow_dispatch:   # permite execução manual para emergências
+
+env:
+  TF_VERSION:  "1.6.6"
+  AWS_REGION:  "us-east-1"
+  TF_WORK_DIR: "aula-10/terraform"
+
+jobs:
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Configura Terraform ─────────────────────────────────────────────────
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # ── Credenciais AWS (Learner Lab) ────────────────────────────────────────
+      # Em produção, usar OIDC: role-to-assume + sem chaves estáticas
+      - name: Configurar credenciais AWS (Learner Lab)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      # ── Verificar identidade ─────────────────────────────────────────────────
+      - name: Verificar identidade AWS
+        run: aws sts get-caller-identity
+
+      # ── Terraform init ───────────────────────────────────────────────────────
+      - name: Terraform init
+        working-directory: ${{ env.TF_WORK_DIR }}
+        run: terraform init -input=false
+
+      # ── Terraform validate ───────────────────────────────────────────────────
+      - name: Terraform validate
+        working-directory: ${{ env.TF_WORK_DIR }}
+        run: terraform validate -no-color
+
+      # ── Terraform apply ──────────────────────────────────────────────────────
+      - name: Terraform apply
+        id: apply
+        working-directory: ${{ env.TF_WORK_DIR }}
+        run: |
+          terraform apply \
+            -auto-approve \
+            -input=false \
+            -no-color \
+            2>&1 | tee apply_output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      # ── Captura outputs do Terraform ─────────────────────────────────────────
+      - name: Capturar Terraform outputs
+        id: tf_outputs
+        working-directory: ${{ env.TF_WORK_DIR }}
+        run: |
+          EC2_IP=$(terraform output -raw ec2_public_ip 2>/dev/null || echo "N/A")
+          ECR_URL=$(terraform output -raw ecr_repository_url 2>/dev/null || echo "N/A")
+          API_URL=$(terraform output -raw api_url 2>/dev/null || echo "N/A")
+          echo "ec2_ip=${EC2_IP}"   >> "$GITHUB_OUTPUT"
+          echo "ecr_url=${ECR_URL}" >> "$GITHUB_OUTPUT"
+          echo "api_url=${API_URL}" >> "$GITHUB_OUTPUT"
+
+      # ── Resumo no Actions ────────────────────────────────────────────────────
+      - name: Resumo do apply
+        if: always()
+        run: |
+          echo "## ✅ Terraform Apply — Aula 10" >> "$GITHUB_STEP_SUMMARY"
+          echo ""                                 >> "$GITHUB_STEP_SUMMARY"
+          echo "**Commit:** \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Status:** ${{ steps.apply.outcome }}"  >> "$GITHUB_STEP_SUMMARY"
+          echo ""                                 >> "$GITHUB_STEP_SUMMARY"
+          echo "### Outputs"                      >> "$GITHUB_STEP_SUMMARY"
+          echo "| Recurso | Valor |"              >> "$GITHUB_STEP_SUMMARY"
+          echo "|---------|-------|"              >> "$GITHUB_STEP_SUMMARY"
+          echo "| EC2 IP  | \`${{ steps.tf_outputs.outputs.ec2_ip }}\` |"  >> "$GITHUB_STEP_SUMMARY"
+          echo "| ECR URL | \`${{ steps.tf_outputs.outputs.ecr_url }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| API URL | \`${{ steps.tf_outputs.outputs.api_url }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo ""                                 >> "$GITHUB_STEP_SUMMARY"
+          echo "⚠️ *Learner Lab: credenciais de sessão expiram a cada ~4h.*" >> "$GITHUB_STEP_SUMMARY"
+          echo "*Em produção, use OIDC + IAM Role (sem chaves estáticas).*" >> "$GITHUB_STEP_SUMMARY"

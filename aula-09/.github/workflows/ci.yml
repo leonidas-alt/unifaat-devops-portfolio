@@ -1,0 +1,163 @@
+# =============================================================================
+# ci.yml — Pipeline CI completo: lint, test, build e push para Amazon ECR
+#
+# Parte 7 (opcional) do TF Aula 09.
+# Usa credenciais temporárias do Learner Lab configuradas como Secrets:
+#   AWS_ACCESS_KEY_ID      → Settings > Secrets > Actions
+#   AWS_SECRET_ACCESS_KEY  → Settings > Secrets > Actions
+#   AWS_SESSION_TOKEN      → Settings > Secrets > Actions
+#
+# ATENÇÃO: As credenciais do Learner Lab expiram a cada sessão (~4h).
+# O push via ECR neste workflow funciona apenas enquanto as credenciais
+# estiverem válidas. Para fluxo confiável use o ecr-push.sh localmente.
+# =============================================================================
+name: CI — Aula 09
+
+on:
+  push:
+    branches: [main, 'feature/**']
+    paths:
+      - 'aula-09/**'
+      - '.github/workflows/ci-aula09.yml'
+  workflow_dispatch:     # permite execução manual
+
+env:
+  AWS_REGION:  us-east-1
+  REPO_NAME:   technova-api
+  WORKING_DIR: aula-09
+
+jobs:
+  # ── Job 1: Lint e Testes ───────────────────────────────────────────────────
+  test:
+    name: Lint e Testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: aula-09/package-lock.json
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes
+        run: npm run test:ci
+
+      - name: Upload cobertura
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: aula-09/coverage/
+          retention-days: 7
+
+  # ── Job 2: Build e Push para ECR ──────────────────────────────────────────
+  ecr-push:
+    name: Build e Push para ECR
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test       # só faz push se lint/test passarem
+    if: github.ref == 'refs/heads/main'   # push apenas na main
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Configura credenciais AWS (Learner Lab) ────────────────────────────
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      # ── Login no ECR ──────────────────────────────────────────────────────
+      - name: Login no Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── Garantir repositório ECR (idempotente) ────────────────────────────
+      - name: Garantir repositório ECR
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          aws ecr describe-repositories \
+            --repository-names "$REPO_NAME" \
+            --region "$AWS_REGION" 2>/dev/null || \
+          aws ecr create-repository \
+            --repository-name "$REPO_NAME" \
+            --region "$AWS_REGION" \
+            --image-scanning-configuration scanOnPush=true \
+            --tags Key=Project,Value=TechNova Key=ManagedBy,Value=github-actions
+
+      # ── Calcular tags ────────────────────────────────────────────────────
+      - name: Calcular tags da imagem
+        id: tags
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          SHA_SHORT="${GITHUB_SHA::7}"
+          IMAGE_BASE="${REGISTRY}/${REPO_NAME}"
+
+          TAGS="${IMAGE_BASE}:sha-${SHA_SHORT},${IMAGE_BASE}:latest"
+
+          # Semver se existir git tag no commit
+          GIT_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || echo "")
+          if [[ "$GIT_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+            TAGS="${TAGS},${IMAGE_BASE}:${MAJOR}.${MINOR}.${PATCH}"
+            TAGS="${TAGS},${IMAGE_BASE}:${MAJOR}.${MINOR}"
+            TAGS="${TAGS},${IMAGE_BASE}:${MAJOR}"
+            echo "semver=${MAJOR}.${MINOR}.${PATCH}" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "sha_short=${SHA_SHORT}"  >> "$GITHUB_OUTPUT"
+          echo "image_base=${IMAGE_BASE}" >> "$GITHUB_OUTPUT"
+          echo "tags=${TAGS}"            >> "$GITHUB_OUTPUT"
+          echo "Tags calculadas: ${TAGS}"
+
+      # ── Build e Push ─────────────────────────────────────────────────────
+      - name: Build e Push da imagem
+        uses: docker/build-push-action@v5
+        with:
+          context:    ${{ env.WORKING_DIR }}
+          file:       ${{ env.WORKING_DIR }}/Dockerfile
+          push:       true
+          tags:       ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.repository.updated_at }}
+            git.commit=${{ steps.tags.outputs.sha_short }}
+
+      # ── Resumo no GitHub Actions ─────────────────────────────────────────
+      - name: Resumo do pipeline
+        env:
+          IMAGE_BASE: ${{ steps.tags.outputs.image_base }}
+          SHA_SHORT:  ${{ steps.tags.outputs.sha_short }}
+          SEMVER:     ${{ steps.tags.outputs.semver }}
+        run: |
+          echo "## ✅ Pipeline CI — Aula 09" >> "$GITHUB_STEP_SUMMARY"
+          echo ""                              >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tag | URI |"                >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|-----|"                >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`sha-${SHA_SHORT}\` | \`${IMAGE_BASE}:sha-${SHA_SHORT}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`latest\`           | \`${IMAGE_BASE}:latest\` |"           >> "$GITHUB_STEP_SUMMARY"
+          if [[ -n "$SEMVER" ]]; then
+            echo "| \`${SEMVER}\` | \`${IMAGE_BASE}:${SEMVER}\` |" >> "$GITHUB_STEP_SUMMARY"
+          fi
