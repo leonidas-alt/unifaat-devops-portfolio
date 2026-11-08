@@ -1,0 +1,203 @@
+# =============================================================================
+# terraform-plan.yml — Terraform Plan automático em Pull Requests
+#
+# Aula 10: Terraform GitOps + CD Pipeline
+# Aluno: Emilly Santos de Oliveira (RA: 4023575)
+#
+# Fluxo:
+#   1. Disparado em Pull Requests para main (apenas se .tf/.tfvars mudaram)
+#   2. Configura credenciais temporárias do Learner Lab
+#   3. Executa: terraform fmt -check → init → validate → plan
+#   4. Posta o output do plan como comentário no PR
+#   5. Falha se o plan falhar (PR não pode ser mergeado sem plan válido)
+#
+# Secrets necessários (Settings → Secrets → Actions):
+#   AWS_ACCESS_KEY_ID      — Access Key ID do Learner Lab
+#   AWS_SECRET_ACCESS_KEY  — Secret Access Key do Learner Lab
+#   AWS_SESSION_TOKEN      — Session Token do Learner Lab
+#
+# NOTA PRODUÇÃO: Em ambientes reais fora do Learner Lab, substituir as 3
+# credenciais de sessão por OIDC + IAM Role (aws-actions/configure-aws-credentials
+# com role-to-assume). O Lab não permite criar OIDC Provider nem IAM Roles com
+# permissões de trust para GitHub Actions, portanto usamos credenciais de sessão.
+# =============================================================================
+name: Terraform Plan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'aula-10/terraform/**'
+      - '.github/workflows/terraform-plan.yml'
+
+permissions:
+  contents:      read
+  pull-requests: write   # necessário para postar comentário no PR
+
+env:
+  TF_VERSION:   "1.6.6"
+  AWS_REGION:   "us-east-1"
+  TF_WORK_DIR:  "aula-10/terraform"
+
+jobs:
+  terraform-plan:
+    name: Terraform Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Configura Terraform ─────────────────────────────────────────────────
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      # ── Credenciais AWS (Learner Lab) ────────────────────────────────────────
+      # Em produção, usar OIDC: role-to-assume + sem chaves estáticas
+      - name: Configurar credenciais AWS (Learner Lab)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region:            ${{ env.AWS_REGION }}
+
+      # ── Verificar identidade ─────────────────────────────────────────────────
+      - name: Verificar identidade AWS
+        run: aws sts get-caller-identity
+
+      # ── Terraform fmt -check ─────────────────────────────────────────────────
+      - name: Terraform fmt -check
+        id: fmt
+        working-directory: ${{ env.TF_WORK_DIR }}
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      # ── Terraform init ───────────────────────────────────────────────────────
+      - name: Terraform init
+        id: init
+        working-directory: ${{ env.TF_WORK_DIR }}
+        run: terraform init -input=false
+
+      # ── Terraform validate ───────────────────────────────────────────────────
+      - name: Terraform validate
+        id: validate
+        working-directory: ${{ env.TF_WORK_DIR }}
+        run: terraform validate -no-color
+
+      # ── Terraform plan ───────────────────────────────────────────────────────
+      - name: Terraform plan
+        id: plan
+        working-directory: ${{ env.TF_WORK_DIR }}
+        run: |
+          terraform plan \
+            -no-color \
+            -input=false \
+            -out=tfplan \
+            2>&1 | tee plan_output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      # ── Postar comentário no PR ──────────────────────────────────────────────
+      - name: Postar plan como comentário no PR
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        env:
+          PLAN_OUTPUT: ${{ steps.plan.outputs.stdout }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            // Lê o output do plan do arquivo
+            let planOutput = '';
+            try {
+              planOutput = fs.readFileSync('${{ env.TF_WORK_DIR }}/plan_output.txt', 'utf8');
+            } catch (e) {
+              planOutput = 'Não foi possível ler o output do plan.';
+            }
+
+            // Limita o tamanho para não exceder limite do GitHub (65536 chars)
+            const MAX_LENGTH = 60000;
+            if (planOutput.length > MAX_LENGTH) {
+              planOutput = planOutput.slice(0, MAX_LENGTH) + '\n\n... [output truncado]';
+            }
+
+            const fmtStatus  = '${{ steps.fmt.outcome }}'      === 'success' ? '✅' : '⚠️';
+            const initStatus = '${{ steps.init.outcome }}'     === 'success' ? '✅' : '❌';
+            const valStatus  = '${{ steps.validate.outcome }}' === 'success' ? '✅' : '❌';
+            const planStatus = '${{ steps.plan.outcome }}'     === 'success' ? '✅' : '❌';
+
+            const body = `## 🏗️ Terraform Plan — Resultado
+
+            | Step | Status |
+            |------|--------|
+            | \`fmt -check\` | ${fmtStatus} |
+            | \`init\` | ${initStatus} |
+            | \`validate\` | ${valStatus} |
+            | \`plan\` | ${planStatus} |
+
+            <details>
+            <summary>📋 Output do <code>terraform plan</code> (clique para expandir)</summary>
+
+            \`\`\`hcl
+            ${planOutput}
+            \`\`\`
+
+            </details>
+
+            ---
+            *Commit: \`${{ github.sha }}\` | Workflow: \`${{ github.workflow }}\`*
+            *⚠️ Learner Lab: credenciais de sessão expiram a cada ~4h. Em produção, use OIDC + IAM Role.*`;
+
+            // Busca comentário anterior para atualizar (evita duplicatas)
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' &&
+              c.body.includes('🏗️ Terraform Plan — Resultado')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner:      context.repo.owner,
+                repo:       context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      # ── Falha se o plan falhou ───────────────────────────────────────────────
+      - name: Verificar resultado do plan
+        if: steps.plan.outcome == 'failure'
+        run: |
+          echo "❌ Terraform plan falhou. O PR não pode ser mergeado."
+          exit 1
+
+      # ── Resumo no Actions ────────────────────────────────────────────────────
+      - name: Resumo do workflow
+        if: always()
+        run: |
+          echo "## 🏗️ Terraform Plan — Aula 10" >> "$GITHUB_STEP_SUMMARY"
+          echo ""                                 >> "$GITHUB_STEP_SUMMARY"
+          echo "| Step | Resultado |"            >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|-----------|"            >> "$GITHUB_STEP_SUMMARY"
+          echo "| fmt -check | ${{ steps.fmt.outcome }} |"      >> "$GITHUB_STEP_SUMMARY"
+          echo "| init       | ${{ steps.init.outcome }} |"     >> "$GITHUB_STEP_SUMMARY"
+          echo "| validate   | ${{ steps.validate.outcome }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| plan       | ${{ steps.plan.outcome }} |"     >> "$GITHUB_STEP_SUMMARY"
